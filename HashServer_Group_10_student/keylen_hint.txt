@@ -1,0 +1,1 @@
+Secret key length is between 8 and 32 bytes (inclusive).

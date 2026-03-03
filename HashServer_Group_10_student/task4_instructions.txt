@@ -1,0 +1,25 @@
+Task 4 (Length-Extension Vulnerability Demonstration) — Group 10
+
+You are given:
+  - message.txt   : the original message (m)
+  - tag.hex       : the original tag = SHA1(key || m), where key is secret
+  - keylen_hint.txt : a hint for the secret key length (range)
+
+Goal:
+  Produce a forged message m' and forged tag t' such that:
+    t' = SHA1(key || m')
+  where:
+    m' = m || padding || "&role=admin"
+
+Required deliverables for Task 4:
+  1) forged_message.txt  (your m')
+  2) forged_tag.hex      (your t')
+
+Notes:
+  - The construction SHA1(key||message) is INSECURE for Merkle–Damgård hashes because
+    an attacker can extend the message using length-extension.
+  - You do NOT know the key. You may need to guess the key length within the provided range.
+  - You do not need to recover the key.
+
+Submission check:
+  Your instructor will verify your forged pair (m', t') using the hidden key assigned to your group.

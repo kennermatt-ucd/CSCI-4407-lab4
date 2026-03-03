@@ -1,0 +1,1 @@
+user=student10&uid=10010&role=user&course=CSCI4407&nonce=d5f3a9ee839e90e2
