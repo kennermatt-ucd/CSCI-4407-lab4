@@ -412,8 +412,10 @@ sha256sum fileA.bin fileB.bin
 ### Screenshots
 
 <!-- Insert screenshot: sha1sum/sha256sum before modification (matching digests) -->
+![Task 6 before](Screenshots/Task6a.png)
 
 <!-- Insert screenshot: sha1sum/sha256sum after 1-byte modification (different digests) -->
+![task 6 after](Screenshots/Task6b.png)
 
 ### Before / After Comparison
 
