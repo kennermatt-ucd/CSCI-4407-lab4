@@ -136,9 +136,17 @@ python scripts/task1_avalanche.py
 
 ### Question 6.1.1
 
+### Question 6.1.1
+
 **Q:** Based on your results, does SHA-256 demonstrate the avalanche effect? (i) cite computed averages, (ii) explain why ~50% bit-flip is expected, (iii) discuss why multiple trials are necessary.
 
-**A:** <!-- TODO: write answer after running the script -->
+**A:**
+
+Yes, SHA-256 demonstrates the avalanche effect. In our experiment, changing a single character in the input message resulted in an average of **129.4 out of 256 bits** changing in the hash output, which corresponds to an average of **50.55% of the bits flipping**. These results are very close to the theoretical expectation of about 50%, indicating that even a very small change in the input produces a large and unpredictable change in the output.
+
+A ~50% bit change is expected because a well-designed cryptographic hash function behaves similarly to a random function. When a single input bit changes, each output bit should have about a **50% probability of flipping**. Since SHA-256 produces a **256-bit digest**, this means that roughly **128 bits** should change on average. This property ensures strong diffusion, making it extremely difficult to predict how small input changes affect the output.
+
+Multiple trials are necessary because the avalanche effect is a **statistical property**. A single trial could produce results slightly above or below the expected value due to randomness. By performing several trials and averaging the results, we obtain a more reliable measurement that better represents the true behavior of the hash function.
 
 ---
 
@@ -426,9 +434,19 @@ sha256sum fileA.bin fileB.bin
 
 ### Question 6.6.1
 
+### Question 6.6.1
+
 **Q:** Why are hash functions highly sensitive to small input changes? Why does comparing hashes alone not guarantee authenticity without a trusted reference channel?
 
-**A:** <!-- TODO: write answer -->
+**A:**
+
+Cryptographic hash functions are designed to be highly sensitive to small input changes because of the **avalanche effect**. This property ensures that even a tiny modification to the input, such as changing a single bit or character, causes a large and unpredictable change in the resulting hash output. This sensitivity makes hash functions useful for detecting file corruption or tampering, since any modification to the original data will produce a completely different digest.
+
+However, comparing hashes alone does not guarantee authenticity. Hash comparison only verifies that the file matches the provided hash value; it does not prove that the hash itself is legitimate. If the hash value is obtained from an untrusted source, an attacker could provide a malicious file along with a matching hash for that malicious file.
+
+For this reason, the **reference hash must come from a trusted source**. A trusted channel ensures that the hash value truly corresponds to the original, untampered file. Common trusted sources include official software websites, digitally signed releases, or secure distribution channels.
+
+If an attacker is able to modify both the file and the hash, the integrity check becomes meaningless. The attacker could replace the original file with a malicious one and simply generate a new hash for it. Since the computed hash would match the attacker’s provided hash, the verification process would falsely indicate that the file is authentic.
 
 ---
 
