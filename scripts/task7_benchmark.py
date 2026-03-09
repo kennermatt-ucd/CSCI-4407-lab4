@@ -99,11 +99,6 @@ def main() -> None:
 
     print(f"Results saved → {BENCH_OUT}")
     print()
-    print("Key observations to discuss in your report:")
-    print("  - SHA-512 may outperform SHA-256 on 64-bit CPUs (wider word operations)")
-    print("  - SHA-1 is fastest but cryptographically broken (collision attacks known)")
-    print("  - Performance should NOT be the sole criterion for algorithm selection")
-    print("  - Context: for password hashing, slower is better (see Task 5)")
 
 
 if __name__ == "__main__":

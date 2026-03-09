@@ -254,7 +254,8 @@ This demonstrates how the birthday bound scales with digest size.
 
 **Screenshot — Terminal output for 20 runs at t = 16 bits**
 
-<!-- Insert screenshot: terminal output showing 20 runs for t=16 -->
+![alt text](\Screenshots\Task2.png)
+![alt text](\Screenshots\Task2B.png)
 
 *What to observe:* Each row shows one independent experiment. The "trials" column
 records how many random inputs were generated before a collision occurred. Values
@@ -267,27 +268,27 @@ the collision is genuine.
 
 | Run | Trials to Collision |
 |----:|--------------------:|
-|   1 |                     |
-|   2 |                     |
-|   3 |                     |
-|   4 |                     |
-|   5 |                     |
-|   6 |                     |
-|   7 |                     |
-|   8 |                     |
-|   9 |                     |
-|  10 |                     |
-|  11 |                     |
-|  12 |                     |
-|  13 |                     |
-|  14 |                     |
-|  15 |                     |
-|  16 |                     |
-|  17 |                     |
-|  18 |                     |
-|  19 |                     |
-|  20 |                     |
-| **Avg q̄** |            |
+|   1 |                 290 |
+|   2 |                 265 |
+|   3 |                 393 |
+|   4 |                 310 |
+|   5 |                 143 |
+|   6 |                 366 |
+|   7 |                 193 |
+|   8 |                 442 |
+|   9 |                 455 |
+|  10 |                 293 |
+|  11 |                 154 |
+|  12 |                 260 |
+|  13 |                 350 |
+|  14 |                 775 |
+|  15 |                 288 |
+|  16 |                 242 |
+|  17 |                 260 |
+|  18 |                 339 |
+|  19 |                 361 |
+|  20 |                 213 |
+| **Avg q̄** |       **319.60** |
 
 **Theoretical estimate:** q ≈ 1.2 × 2^(16/2) = 1.2 × 256 ≈ **307.2**
 
@@ -300,8 +301,8 @@ the collision is genuine.
 We used **t = 16 bits**, giving a hash space of 2^16 = 65,536 possible digest values.
 The theoretical birthday estimate is q ≈ 1.2 × 2^(16/2) = 1.2 × 256 = **307.2** trials.
 
-Our experimental average q̄ ≈ **[fill in from results table]** trials. The ratio
-q̄ / 307.2 ≈ **[fill in]**, which should be close to 1.0, confirming that the birthday
+Our experimental average q̄ = **319.60** trials. The ratio
+q̄ / 307.2 = **1.040**, which is very close to 1.0, confirming that the birthday
 paradox prediction matches empirical observation.
 
 **Why the birthday bound is √(2^n), not 2^n.**
@@ -1261,7 +1262,9 @@ all nine algorithm-size combinations.
 
 **Screenshot 1 — CLI `time` output for the 1 MB file, all three algorithms**
 
-<!-- Insert screenshot: CLI time output for 1 MB file, all three algorithms -->
+![alt text](Screenshots\Task7A1.png)
+![alt text](Screenshots\Task7A2.png)
+![alt text](Screenshots\Task7A3.png)
 
 *What to observe:* Three sets of five `time` outputs. The `real` row is the wall-clock
 time per hash. SHA-1 should be fastest, with SHA-256 and SHA-512 close behind. Five
@@ -1269,7 +1272,7 @@ repetitions per algorithm should show low variance, indicating stable measuremen
 
 **Screenshot 2 — `task7_benchmark.py` structured results table**
 
-<!-- Insert screenshot: task7_benchmark.py structured results table -->
+![alt text](Screenshots/Task7B.png)
 
 *What to observe:* A nine-row table with columns for file size, algorithm, average
 time, and throughput in MB/s. Throughput should be approximately constant across
@@ -1281,17 +1284,15 @@ explained in the answer below.
 
 | File Size | Algorithm | Avg Time (s) | Throughput (MB/s) |
 |:---------:|:---------:|:------------:|:-----------------:|
-| 1 KB      | SHA-1     |              |                   |
-| 1 KB      | SHA-256   |              |                   |
-| 1 KB      | SHA-512   |              |                   |
-| 1 MB      | SHA-1     |              |                   |
-| 1 MB      | SHA-256   |              |                   |
-| 1 MB      | SHA-512   |              |                   |
-| 10 MB     | SHA-1     |              |                   |
-| 10 MB     | SHA-256   |              |                   |
-| 10 MB     | SHA-512   |              |                   |
-
-*(Fill in from task7_benchmark.py output.)*
+| 1 KB      | SHA-1     |   0.000007   |          138.67   |
+| 1 KB      | SHA-256   |   0.000002   |          401.94   |
+| 1 KB      | SHA-512   |   0.000003   |          311.46   |
+| 1 MB      | SHA-1     |   0.000431   |        2,320.48   |
+| 1 MB      | SHA-256   |   0.000512   |        1,953.94   |
+| 1 MB      | SHA-512   |   0.001070   |          934.38   |
+| 10 MB     | SHA-1     |   0.004312   |        2,319.26   |
+| 10 MB     | SHA-256   |   0.004951   |        2,019.79   |
+| 10 MB     | SHA-512   |   0.010779   |          927.70   |
 
 ### Question 6.7.1
 
@@ -1312,10 +1313,13 @@ which is why SHA-256 is typically slower than SHA-1.
 64-bit operands. On a 64-bit CPU, each 64-bit operation executes in a single
 instruction, the same cost as a 32-bit operation. SHA-512 processes 128-byte blocks,
 while SHA-256 processes 64-byte blocks. For the same message length, SHA-512 therefore
-requires half the number of block-compression calls. Because each call has fixed
-overhead (memory accesses, loop control), the halved call count can outweigh
-SHA-512's larger per-round cost, resulting in higher overall throughput on 64-bit
-hardware.
+requires half the number of block-compression calls. In theory, the halved call count
+can outweigh SHA-512's larger per-round cost, resulting in higher throughput.
+However, our results show SHA-512 averaging 928 MB/s vs SHA-256 at 1,954 MB/s — SHA-512
+was about 2× slower. This is consistent with Python's hashlib running in a WSL2
+environment rather than native hardware with SIMD-optimised SHA-512. On bare-metal
+64-bit Linux with hardware acceleration, SHA-512 throughput often matches or exceeds
+SHA-256.
 
 **Why performance alone should not determine algorithm choice.** SHA-1 is the fastest
 of the three, but it is cryptographically broken for collision resistance: the
