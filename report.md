@@ -2,7 +2,7 @@
 
 **Course:** CSCI/CSCY 4407 — Security & Cryptography
 **Semester:** Spring 2026
-**Date:** <!-- fill in submission date -->
+**Date:** 3/8/26
 **Group Members:** Cassius Kemp, Matthew Kenner, Jonathan Le
 
 ---
@@ -214,7 +214,61 @@ python scripts/task2_birthday.py --bits 24 --runs 20
 ### Source Code
 
 ```python
-# See scripts/task3_toy_md.py
+import hashlib
+import sys
+
+BLOCKSIZE = 16  #Processes our message in 16-byte chunks (Chunking!!!!)
+IV = b'\x00' * 4 #Initial Value (4 bytes are used for our 32-bit Hoashing)
+
+def ToyCompression(PreviousState, MessageBlock):
+    """
+    Toy Compression:
+    1. Concatenate the previous state (V_i-1) and current block (M_i).
+    2. Hashes them using a SHA-256 algorithm.
+    3. Truncates output to 32 bits, also written as 4 bytes.
+    """
+    Data = PreviousState + MessageBlock
+    CompleteHash = hashlib.sha256(Data).digest()
+    return CompleteHash[:4]
+
+def ToyHashing(Message):
+    print(f"\nIngesting The Message: {Message}")
+    print("-" * 50)
+    
+    #Padds the last message block with zeros to fill the block so it has not empty bits
+    MessageBytes = Message.encode()
+    PaddingLength = (BLOCKSIZE - (len(MessageBytes) % BLOCKSIZE)) % BLOCKSIZE
+    PaddedMessage = MessageBytes + (b'\x00' * PaddingLength)
+    
+    #Splits the message into blocks
+    Blocks = [PaddedMessage[i:i+BLOCKSIZE] for i in range(0, len(PaddedMessage), BLOCKSIZE)]
+    print(f"Total Amount Blocks: {len(Blocks)}")
+    
+    #Compresses iteratively
+    State = IV
+    print(f"IV (V0): {State.hex()}")
+    
+    for i, Block in enumerate(Blocks):
+        State = ToyCompression(State, Block)
+        print(f"Block {i+1}: {Block} -> State (V{i+1}): {State.hex()}")
+        
+    print("-" * 50)
+    print(f"The Final Digest: {State.hex()}")
+    return State.hex()
+
+if __name__ == "__main__":
+    #Test 1: Original Message
+    MessageTest = "Cryptography is very very cool and interesting."
+    ToyHashing(MessageTest)
+
+    #Test 2: Chaining Sensitivity (Changes one character)
+    #We changed the period to an exclamation point for some cool flair
+    MessageTestAgain = "Cryptography is very very cool and interesting!"
+    ToyHashing(MessageTestAgain)
+    
+    #Test 3: Chaining Sensitivity (Changes the entire sentence)
+    MessageTestAgainAgain = "CRYPTOGRAPHY IS AWESOME AND I LOVE IT!!"
+    ToyHashing(MessageTestAgainAgain)
 ```
 
 ### Design Choices
@@ -230,7 +284,7 @@ python scripts/task2_birthday.py --bits 24 --runs 20
 ### Steps
 
 ```bash
-python scripts/task3_toy_md.py
+python3 toy_md.py
 ```
 
 ### Screenshots
@@ -239,27 +293,40 @@ python scripts/task3_toy_md.py
 
 <!-- Insert screenshot: chaining sensitivity demo (modified block 2 cascades) -->
 
+<!-- Both are in one screenshot -->
+![Task 3](Screenshots/Task3.png)
+
 ### Sample Output (fill in after running)
 
 ```
-Message: b'CSCI4407 Group10 Lab4 Hash Demo'
-Block count: 2
-V0 (IV): 00000000
-V1      : ????????   (after block 1)
-V2      : ????????   (after block 2)  ← final digest
+Ingesting The Message: Cryptography is ver very cool and interesting.
+Total Amount Of Blovks: 3
+IV (V0): 00000000
+Block (1): b'Cryptography is ' -> State (V1): 05ff8487
+Block (2): b'very very cool a' -> State (V2): e651c941
+Block (3): b'nd interesting. \x00' -> State (V3): 9f3d5ed6
+Final Digest: 9f3d5ed6
+
+Ingesting The Message: Cryptography is ver very cool and interesting!
+Total Amount Of Blovks: 3
+IV (V0): 00000000
+Block (1): b'Cryptography is ' -> State (V1): 05ff8487
+Block (2): b'very very cool a' -> State (V2): e651c941
+Block (3): b'nd interesting! \x00' -> State (V3): a4e4d9a0
+Final Digest: a4e4d9a0
 ```
 
 ### Chaining Sensitivity
 
 | Block Modified | V1 changed? | V2 changed? | V3 changed? |
 |:--------------:|:-----------:|:-----------:|:-----------:|
-| Block 2        | No          | Yes         | Yes         |
+| Block 3        | No          | NO          | Yes         |
 
 ### Question 6.3 (Answer Required)
 
 **Q:** How do chaining values propagate changes across blocks? Why does modifying one block affect the final digest? Why does 32-bit truncation make the construction insecure?
 
-**A:** <!-- TODO: write answer after running the script -->
+**A:** In the Merkle–Damgård Theorem chaining values will enable changes as each block's output state becomes the input for the next compression step (Vi = h (Vi − 1 , Mi)). Modifying even a single bit in one block completely randomizes the output, and due to the avalanche effect (Found often if not always in hashing) this altered ouput then gets given to the next block therefor creating a chain reaction that subsequently changes all following states and outputs guaranteeing a completely different final digest. However, truncating this final digest to only 32 bits renders the Theorem practically insecure (The small keyspace problem). Due to the nature of Birthday attacks, a 32-bit hash space requires an attacker to compute only about 2^(32) = 2^(16), (65,536) hashes to find a collision. Modern computers can perform this attack in microseconds and breaking the collision resistance that is necessary for a secure cryptographic hash function in modnern systems.
 
 ---
 
@@ -277,7 +344,174 @@ V2      : ????????   (after block 2)  ← final digest
 ### Source Code
 
 ```python
-# See scripts/task4_length_extension.py
+import struct
+import sys
+import os
+
+#SHA-1 WITH STATE INJECTION (Im not too sure if this works correctly, perhaps i've been overzealous)
+class SHA1:
+    def __init__(Self, State=None, Count=0):
+        #SHA-1 Initial Values
+        if State is None:
+            Self._h = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0]
+        else:
+            Self._h = list(State) #Injects the current running state (h0 through h4)
+        Self._count = Count       #Injects the active bit count (To preserve the length of the message)
+        Self._buffer = b''
+
+    def LeftRotate(Self, N, B):
+        return ((N << B) | (N >> (32 - B))) & 0xFFFFFFFF
+
+    def ProcessChunk(Self, Chunk):
+        W = [0] * 80
+        for i in range(16):
+            W[i] = struct.unpack(b'>I', Chunk[i*4:i*4+4])[0]
+        for i in range(16, 80):
+            W[i] = Self.LeftRotate(W[i-3] ^ W[i-8] ^ W[i-14] ^ W[i-16], 1)
+
+        A, B, C, D, E = Self._h
+        for i in range(80):
+            if 0 <= i <= 19:
+                F = (B & C) | ((~B) & D)
+                K = 0x5A827999
+            elif 20 <= i <= 39:
+                F = B ^ C ^ D
+                K = 0x6ED9EBA1
+            elif 40 <= i <= 59:
+                F = (B & C) | (B & D) | (C & D)
+                K = 0x8F1BBCDC
+            elif 60 <= i <= 79:
+                F = B ^ C ^ D
+                K = 0xCA62C1D6
+
+            Temp = (Self.LeftRotate(A, 5) + F + E + K + W[i]) & 0xFFFFFFFF
+            E = D
+            D = C
+            C = Self.LeftRotate(B, 30)
+            B = A
+            A = Temp
+
+        Self._h[0] = (Self._h[0] + A) & 0xFFFFFFFF
+        Self._h[1] = (Self._h[1] + B) & 0xFFFFFFFF
+        Self._h[2] = (Self._h[2] + C) & 0xFFFFFFFF
+        Self._h[3] = (Self._h[3] + D) & 0xFFFFFFFF
+        Self._h[4] = (Self._h[4] + E) & 0xFFFFFFFF
+
+    def Update(Self, Data):
+        if isinstance(Data, str): Data = Data.encode()
+        Self._buffer += Data
+        Self._count += len(Data) * 8
+        while len(Self._buffer) >= 64:
+            Self._process_chunk(Self._buffer[:64])
+            Self._buffer = Self._buffer[64:]
+
+    def HexDigest(Self):
+        #Apply padding to the hex (SHA-1 padding)
+        TemporaryBuffer = Self._buffer
+        TemporaryCount = Self._count
+        
+        TemporaryBuffer += b'\x80'
+        while (len(TemporaryBuffer) + 8) % 64 != 0:
+            TemporaryBuffer += b'\x00'
+        TemporaryBuffer += struct.pack(b'>Q', TemporaryCount)
+        
+        #Process the remaining chunks in a local version so that we dont affect the state of the object
+        localSHA = SHA1(Self._h, Self._count) 
+        for i in range(0, len(TemporaryBuffer), 64):
+            localSHA.ProcessChunk(TemporaryBuffer[i:i+64])
+            
+        return '%08x%08x%08x%08x%08x' % tuple(localSHA._h)
+
+#Attacking below!
+
+def GetPadding(MessageLength):
+    """Calculates SHA-1 padding for the length of our message"""
+    #The padding is 1 bit followed by zeros, this is 64 bits in length :3
+    Padding = b'\x80'
+    while (MessageLength + len(Padding) + 8) % 64 != 0:
+        Padding += b'\x00'
+    
+    #Appends our length in bits
+    Padding += struct.pack(b'>Q', MessageLength * 8)
+    return Padding
+
+def Attack(OGMessageBytes, OGTag, keyLength, Extension):
+    #Obtain and create the internal state from the original tag given by the tag file and splits the 40 character hex tag into 5 chunks of 8 character
+    HashStates = [int(OGTag[i:i+8], 16) for i in range(0, 40, 8)]
+
+    #Calculate the length of the data processed at this point (That being the key, the message, and the tag); The new has that we are creating is the combination of the original message and the padding
+    OGTotalLength = keyLength + len(OGMessageBytes)
+    Padding = GetPadding(OGTotalLength)
+    
+    CBitCount = (OGTotalLength + len(Padding)) * 8
+
+    #Initializes the SHA1 with the Recovered state and updated count
+    ForgedSHA = SHA1(State=HashStates, Count=CBitCount)
+
+    #Updates using the extension that we are using
+    ForgedSHA.Update(Extension)
+
+    #Generates the results of the previous steps
+    NewlyTag = ForgedSHA.HexDigest()
+    
+    #The forged message is the combination of Message, the Padding, and the Extension
+    FMessageBytes = OGMessageBytes + Padding + Extension.encode()
+
+    return NewlyTag, FMessageBytes
+
+if __name__ == "__main__":
+    print("--- Length Extension Attack Tool ---")
+
+
+    try:
+        #Read message.txt
+        with open("message.txt", "rb") as f:
+            OGMessageBytes = f.read().strip()
+            
+        #Read tag.hex
+        with open("tag.hex", "r") as f:
+            OGTag = f.read().strip()
+            
+        print(f"Loaded 'message.txt': {OGMessageBytes}")
+        print(f"Loaded 'tag.hex':     {OGTag}")
+
+    except FileNotFoundError:
+        print("Error: Could not find 'message.txt' or 'tag.hex'.")
+        print("\nPlease run this script inside your unzipped artifact folder.")
+        sys.exit(1)
+
+    #Config
+    Extension = "&role=admin"
+    
+    #Checks for hint file to guess the key length or just guesses 12 everytime if user input is invalid
+    try:
+        if os.path.exists("keylen_hint.txt"):
+            with open("keylen_hint.txt", "r") as f:
+                print(f"HINT FOUND: {f.read().strip()}")
+        
+        GuessKeyLength = int(input("Enter the key length to try: "))
+    except ValueError:
+        print("Invalid input. Using a key length of 12.")
+        GuessKeyLength = 12
+
+    #Performs the attack of forgery
+    print(f"\nAttack is using Key Length: {GuessKeyLength}...")
+    
+    NewlyTag, ForgedMessage = Attack(OGMessageBytes, OGTag, GuessKeyLength, Extension)
+    
+    print(f"\nForged Tag: {NewlyTag}")
+    
+    print(f"\nForged Message: {ForgedMessage}")
+    
+    #Saves our outputs
+    with open("forged_tag.hex", "w") as f:
+        f.write(NewlyTag)
+        
+    with open("forged_message.txt", "wb") as f:
+        f.write(ForgedMessage)
+        
+    print("Saved 'forged_tag.hex' and 'forged_message.txt'")
+    print("Attack Completed.")
 ```
 
 ### Steps
@@ -296,15 +530,19 @@ python scripts/task4_length_extension.py
 
 <!-- Insert screenshot: cat message.txt, cat tag.hex, cat keylen_hint.txt -->
 
+![Task 4B](Screenshots/Task4B.png)
+
 <!-- Insert screenshot: task4_length_extension.py terminal output showing forged_tag candidates -->
 
 <!-- Insert screenshot: forged_message.txt (hexdump or xxd) and forged_tag.hex -->
+
+![Task 4](Screenshots/Task4.png)
 
 ### Attack Output
 
 | Key Length (tested) | Forged Tag                               | Forged Msg Size |
 |:-------------------:|------------------------------------------|:---------------:|
-| 8–32 (all)          | `4e1193fd0e9e1990e803b2d145ae1f0279823099` | 107–131 bytes  |
+| 16                  | `4e1193fd0e9e1990e803b2d145ae1f0279823099` | 107–131 bytes  |
 
 > **Note:** All 25 key-length candidates produce the same forged tag because
 > `key_len + len(message) + SHA-1-padding` always falls in the same 128-byte
@@ -317,7 +555,7 @@ python scripts/task4_length_extension.py
 ### How the Attack Works
 
 The SHA-1 tag is computed as `SHA1(key || message)`. SHA-1 follows the Merkle–Damgård
-construction: after processing each 512-bit block it exposes its internal state (h0–h4)
+Theorem: after processing each 512-bit block it exposes its internal state (h0–h4)
 in the final digest. Because we have the digest, we have the exact internal state SHA-1
 was in after hashing `(key || message)`. We can therefore:
 
@@ -330,16 +568,9 @@ was in after hashing `(key || message)`. We can therefore:
 
 **Q:** Why does SHA1(k||m) fail to provide secure message authentication even though SHA-1 is a cryptographic hash? Explain how Merkle–Damgård enables length extension and why HMAC does not suffer from this.
 
-**A:** <!-- TODO: write answer -->
+**A:** The construction of SHA1(k||m) fails to provide secure message authentication because SHA-1 is built on the Merkle–Damgård theorem, which makes it vulnerable to length-extension attacks. In the Merkle–Damgård construction, messages are processed in fixed-size blocks, and the final hash digest is simply the internal state of the algorithm after processing the final block (including message padding). Because the output is the internal state, an attacker who intercepts the hash and obtains the knowledge of the length of the secret key can calculate the exact padding used. The attacker can then load the intercepted hash back into the SHA-1 algorithm as the starting state and give it the extension. This produces a perfectly valid hash for k || m || padding || extension without the attacker ever needing to know the secret key.
 
-The construction `SHA1(k||m)` is insecure because SHA-1's Merkle–Damgård structure
-leaks its internal state in the output digest. An attacker who knows the tag (and can
-guess or brute-force the key length) can resume the hash computation without knowing
-the key, producing a valid tag for an extended message.
-
-HMAC avoids this by computing `H(k_outer || H(k_inner || m))` — the outer hash wraps the
-inner digest, so the attacker cannot inject their extension at the right point: they would
-need to compute `H(k_outer || ...)` which requires knowing `k_outer`.
+HMAC prevents this vulnerability by using a nested two-pass hashing mechanism defined as H(k ⊕ opad || H(k ⊕ ipad || m)). Even if an attacker successfully extends the inner hash, they cannot compute the final outer hash because doing so requires prepending the secret key (k ⊕ opad) to the output of the inner hash. Since the attacker does not know the key they cannot repordouce the outer hashing step, effectively sealing the hash and neutralizing the length-extension vulnerability.
 
 ---
 
@@ -347,52 +578,281 @@ need to compute `H(k_outer || ...)` which requires knowing `k_outer`.
 
 ### Source Code
 
+##pwd_hash.py
 ```python
-# See scripts/task5_pwd_hash.py
-# See scripts/task5_dict_attack.py
+import hashlib
+import time
+import os
+import binascii
+
+#Config
+TARGETPASSWORD = "shadow"  #The password we are going to use later
+SALTSIZE = 16
+ITERATIONS = 200000         #For PBKDF2
+
+def SaveFile(FileName, Data):
+    with open(FileName, "w") as f:
+        f.write(Data)
+    print(f"Saved {FileName}")
+
+def GenerateHashes():
+    print(f"Hashing password '{TARGETPASSWORD}'\n")
+
+    #UNSALTED SHA-256
+    Start = time.time()
+    UnsaltedHash = hashlib.sha256(TARGETPASSWORD.encode()).hexdigest()
+    End = time.time()
+    
+    print(f"Unsalted Hash: {UnsaltedHash}")
+    print(f"Unsalted Hash time to compute: {(End - Start):.6f} seconds")
+    SaveFile("db_unsalted.txt", UnsaltedHash)
+
+    #SALTED SHA-256
+    Start = time.time()
+    Salt = os.urandom(SALTSIZE)
+    SaltedHash = hashlib.sha256(Salt + TARGETPASSWORD.encode()).hexdigest()
+    End = time.time()
+    
+    #Format for storage of the password
+    StorageString = f"{Salt.hex()}${SaltedHash}"
+    
+    print(f"\nSalt: {Salt.hex()}")
+    print(f"Salted Hash: {SaltedHash}")
+    print(f"Salted Hash time to compute: {(End - Start):.6f} seconds")
+    SaveFile("db_salted.txt", StorageString)
+
+    #PBKDF2 (Key Stretching)
+    Start = time.time()
+    # Note: PBKDF2 uses the salt and iterations automatically
+    PBKDF2_Hash = hashlib.pbkdf2_hmac(
+        'sha256', 
+        TARGETPASSWORD.encode(), 
+        Salt, 
+        ITERATIONS
+    )
+    End = time.time()
+    
+    StorageString_PBKDF2 = f"{Salt.hex()}${PBKDF2_Hash.hex()}${ITERATIONS}"
+    
+    print(f"\nPBKDF2 Iterations: {ITERATIONS}")
+    print(f"PBKDF2 Hash: {PBKDF2_Hash.hex()}")
+    print(f"PBKDF2 Hash time to compute: {(End - Start):.6f} seconds")
+    SaveFile("db_pbkdf2.txt", StorageString_PBKDF2)
+
+if __name__ == "__main__":
+    GenerateHashes()
+```
+
+##dict_attack.py
+```python
+import hashlib
+import time
+import sys
+
+#Config
+DICTIONARYFILE = "pwds.txt"
+
+def LoadDictionary():
+    try:
+        with open(DICTIONARYFILE, "r") as f:
+            return [line.strip() for line in f.readlines()]
+    except FileNotFoundError:
+        print(f"Error: {DICTIONARYFILE} not found.")
+        sys.exit(1)
+
+def UnsaltedAttack(Dictionary):
+    print("\nUnsalted Attack")
+    try:
+        with open("db_unsalted.txt", "r") as f:
+            TargetHash = f.read().strip()
+    except FileNotFoundError:
+        print("db_unsalted.txt not found. Run pwd_hash.py first.")
+        return
+
+    print(f"Target: {TargetHash}")
+    
+    StartTime = time.time()
+    Attempts = 0
+    Found = False
+    
+    for Password in Dictionary:
+        Attempts += 1
+        #Computes the Hash for us
+        GuessHash = hashlib.sha256(Password.encode()).hexdigest()
+        
+        if GuessHash == TargetHash:
+            Found = True
+            break
+            
+    EndTime = time.time()
+    Duration = EndTime - StartTime
+    
+    if Found:
+        print(f"Password found: '{Password}'")
+        print(f"Time: {Duration:.6f} seconds")
+        Rate = Attempts / Duration if Duration > 0 else float('inf')
+        print(f"Speed: {Rate:.2f} guesses/sec")
+    else:
+        print("Password is not found in the dictionary.")
+
+def SaltedAttack(Dictionary):
+    print("\nSalted Attack")
+    try:
+        with open("db_salted.txt", "r") as f:
+            Content = f.read().strip()
+            SaltHex, TargetHash = Content.split('$')
+            Salt = bytes.fromhex(SaltHex)
+    except FileNotFoundError:
+        return
+
+    print(f"Salt: {SaltHex}")
+    print(f"Target: {TargetHash}")
+    
+    StartTime = time.time()
+    Attempts = 0
+    Found = False
+    
+    for Password in Dictionary:
+        Attempts += 1
+        #Attacker must use the specific salt that is desiginated for this specific user
+        GuessHash = hashlib.sha256(Salt + Password.encode()).hexdigest()
+        
+        if GuessHash == TargetHash:
+            Found = True
+            break
+            
+    EndTime = time.time()
+    Duration = EndTime - StartTime
+    
+    if Found:
+        print(f"Password found: '{Password}'")
+        print(f"Time: {Duration:.6f} seconds")
+        Rate = Attempts / Duration if Duration > 0 else float('inf')
+        print(f"Speed: {Rate:.2f} guesses/sec")
+    else:
+        print("Password not in dictionary.")
+
+def PBKDF2_Attack(Dictionary):
+    print("\nPBKDF2 Attack")
+    try:
+        with open("db_pbkdf2.txt", "r") as f:
+            Content = f.read().strip()
+            SaltHex, TargetHash, IterationsPlural = Content.split('$')
+            Salt = bytes.fromhex(SaltHex)
+            Iterations = int(IterationsPlural)
+    except FileNotFoundError:
+        return
+
+    print(f"Iterations: {Iterations}")
+    print(f"Target: {TargetHash}")
+    
+    StartTime = time.time()
+    Attempts = 0
+    Found = False
+    
+    for Password in Dictionary:
+        Attempts += 1
+    
+        GuessHash = hashlib.pbkdf2_hmac(
+            'sha256', 
+            Password.encode(), 
+            Salt, 
+            Iterations
+        ).hex()
+        
+        if GuessHash == TargetHash:
+            Found = True
+            break
+            
+    EndTime = time.time()
+    Duration = EndTime - StartTime
+    
+    if Found:
+        print(f"Password found: '{Password}'")
+        print(f"Time: {Duration:.6f} seconds")
+        Rate = Attempts / Duration if Duration > 0 else float('inf')
+        print(f"Speed: {Rate:.2f} guesses/sec")
+    else:
+        print("Password not in dictionary.")
+
+if __name__ == "__main__":
+    Words = LoadDictionary()
+    print(f"Loaded {len(Words)} passwords from dictionary.")
+    
+    UnsaltedAttack(Words)
+    SaltedAttack(Words)
+    PBKDF2_Attack(Words)
 ```
 
 ### Password Dictionary
 
 `data/pwds.txt` — 30 candidate passwords including weak passwords, variations, and passphrases.
+```
+Passoword
+123456
+12345678
+qwerty
+admin
+welcome
+login
+security
+football
+shadow
+burger
+fries
+shake
+pizza
+Password123
+MiloTheLynx
+Cryptography
+Goku&Vegeta
+Winter2026!
+Potatoes!TheyAreAVegetableRight??
+ThisIsMySwordSwordMyDiamondSword
+CUDenver
+CryptographyIsNotCrypto!
+Hello
+HowAreYou
+DOYOUKNOWDAWAE
+Doyoulikesoda
+NOIMMOREOFAWATERGUY.
+```
 
 ### Steps
 
 ```bash
 # Generate all three stored hashes for password "Winter2026!"
-python scripts/task5_pwd_hash.py --password "Winter2026!" --iterations 200000
+python3 pwd_hash.py
 
-# Dictionary attack — unsalted
-python scripts/task5_dict_attack.py --mode unsalted
-
-# Dictionary attack — salted
-python scripts/task5_dict_attack.py --mode salted
-
-# Dictionary attack — PBKDF2
-python scripts/task5_dict_attack.py --mode pbkdf2
+# Run the Dictionary attacks
+python3 dict_attack.py
 ```
 
 ### Screenshots
 
 <!-- Insert screenshot: task5_pwd_hash.py output (all three methods) -->
 
+![Task 5](Screenshots/Task5A.png)
+
 <!-- Insert screenshot: dict attack — unsalted (password found) -->
 
 <!-- Insert screenshot: dict attack — PBKDF2 (slow, same password) -->
+
+![Task 5](Screenshots/Task5B.png)
 
 ### Performance Comparison Table
 
 | Method                     | Hash Time      | Guesses/sec (est.) |
 |----------------------------|:--------------:|:------------------:|
-| SHA-256 (unsalted)         |                |                    |
-| SHA-256 (salted, 16-byte)  |                |                    |
-| PBKDF2 (200,000 iterations)|                |                    |
+| SHA-256 (unsalted)         |0.000023 seconds|       436906.67    |
+| SHA-256 (salted, 16-byte)  |0.000008 seconds|       1310720.00   |
+| PBKDF2 (200,000 iterations)|0.321651 seconds|       31.09        |
 
 ### Question 6.5.1
 
 **Q:** Which mechanism provided the greatest security increase: adding a salt or using PBKDF2? Explain why salts don't slow down guessing but still help. Explain why SHA-256 alone is inappropriate for passwords.
 
-**A:** <!-- TODO: write answer after running the scripts -->
+**A:** Using PBKDF2 (key stretching) provided the greatest increase in security against dictionary and brute-force attacks. Based on the experimental data, adding a salt did not reduce the guesses-per-second rate but actually increased it. Implementing PBKDF2 with thousands of iterations drastically decreades the guessing speed, making the attack computationally expensive. Salts did not slow down the password guessing because the underlying hash function still only executes a single time for each guess. However, they provide a critical security benefit by preventing precomputation attacks. Since a unique random salt is appended to each user's password before hashing, this means an attacker cannot use a master list of pre-computed hashes; they must re-compute the entire dictionary for every single user's specific salt. SHA-256 alone is inappropriate for password storage because it is designed to be mathematically fast and highly efficient. In cryptography, high speed is a massive vulnerability for passwords as attackers using modern GPUs or ASICs can evaluate billions of SHA-256 hashes per second. Secure password storage requires specialized Key Derivation Functions (like PBKDF2) that implement a "work factor" to intentionally slow down the hashing process, rendering bulk brute-force guessing unfeasible.
 
 ---
 
